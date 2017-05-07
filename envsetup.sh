@@ -24,8 +24,8 @@ Invoke ". build/envsetup.sh" from your shell to add the following functions to y
 - sepgrep: Greps on all local sepolicy files.
 - sgrep:   Greps on all local source files.
 - godir:   Go to the directory containing a file.
-- cmremote: Add git remote for CM Gerrit Review
-- cmgerrit: A Git wrapper that fetches/pushes patch from/to CM Gerrit Review
+- cmremote: Add git remote for LineageOS Gerrit Review
+- cmgerrit: A Git wrapper that fetches/pushes patch from/to LineageOS Gerrit Review
 - cmrebase: Rebase a Gerrit change and push it again
 - aospremote: Add git remote for matching AOSP repository
 - cafremote: Add git remote for matching CodeAurora repository.
@@ -590,7 +590,7 @@ function breakfast()
             # A buildtype was specified, assume a full device name
             lunch $target
         else
-            # This is probably just the CM model name
+            # This is probably just the Lineage model name
             if [ -z "$variant" ]; then
                 variant="userdebug"
             fi
@@ -1717,12 +1717,12 @@ function cmremote()
     fi
     git remote rm cmremote 2> /dev/null
     GERRIT_REMOTE=$(git config --get remote.github.projectname)
-    CMUSER=$(git config --get review.review.cyanogenmod.org.username)
+    CMUSER=$(git config --get review.review.lineageos.org.username)
     if [ -z "$CMUSER" ]
     then
-        git remote add cmremote ssh://review.cyanogenmod.org:29418/$GERRIT_REMOTE
+        git remote add cmremote ssh://review.lineageos.org:29418/$GERRIT_REMOTE
     else
-        git remote add cmremote ssh://$CMUSER@review.cyanogenmod.org:29418/$GERRIT_REMOTE
+        git remote add cmremote ssh://$CMUSER@review.lineageos.org:29418/$GERRIT_REMOTE
     fi
     echo "Remote 'cmremote' created"
 }
@@ -1735,7 +1735,7 @@ function aospremote()
         return 1
     fi
     git remote rm aosp 2> /dev/null
-    PROJECT=$(pwd -P | sed "s#$ANDROID_BUILD_TOP\/##")
+    PROJECT=$(pwd -P | sed -e "s#$ANDROID_BUILD_TOP\/##; s#-caf.*##; s#\/default##")
     if (echo $PROJECT | grep -qv "^device")
     then
         PFX="platform/"
@@ -1752,12 +1752,12 @@ function cafremote()
         return 1
     fi
     git remote rm caf 2> /dev/null
-    PROJECT=$(pwd -P | sed "s#$ANDROID_BUILD_TOP\/##")
+    PROJECT=$(pwd -P | sed -e "s#$ANDROID_BUILD_TOP\/##; s#-caf.*##; s#\/default##")
     if (echo $PROJECT | grep -qv "^device")
     then
         PFX="platform/"
     fi
-    git remote add caf git://codeaurora.org/$PFX$PROJECT
+    git remote add caf https://source.codeaurora.org/quic/la/$PFX$PROJECT
     echo "Remote 'caf' created"
 }
 
@@ -1879,7 +1879,7 @@ function cmgerrit() {
         $FUNCNAME help
         return 1
     fi
-    local user=`git config --get review.review.cyanogenmod.org.username`
+    local user=`git config --get review.review.lineageos.org.username`
     local review=`git config --get remote.github.review`
     local project=`git config --get remote.github.projectname`
     local command=$1
@@ -2114,7 +2114,7 @@ function cmrebase() {
     local dir="$(gettop)/$repo"
 
     if [ -z $repo ] || [ -z $refs ]; then
-        echo "CyanogenMod Gerrit Rebase Usage: "
+        echo "LineageOS Gerrit Rebase Usage: "
         echo "      cmrebase <path to project> <patch IDs on Gerrit>"
         echo "      The patch IDs appear on the Gerrit commands that are offered."
         echo "      They consist on a series of numbers and slashes, after the text"
@@ -2136,7 +2136,7 @@ function cmrebase() {
     echo "Bringing it up to date..."
     repo sync .
     echo "Fetching change..."
-    git fetch "http://review.cyanogenmod.org/p/$repo" "refs/changes/$refs" && git cherry-pick FETCH_HEAD
+    git fetch "http://review.lineageos.org/p/$repo" "refs/changes/$refs" && git cherry-pick FETCH_HEAD
     if [ "$?" != "0" ]; then
         echo "Error cherry-picking. Not uploading!"
         return
@@ -2410,11 +2410,7 @@ function fixup_common_out_dir() {
     fi
 }
 
-# Force JAVA_HOME to point to java 1.7 if it isn't already set.
-#
-# Note that the MacOS path for java 1.7 includes a minor revision number (sigh).
-# For some reason, installing the JDK doesn't make it show up in the
-# JavaVM.framework/Versions/1.7/ folder.
+# Force JAVA_HOME to point to java 1.7/1.8 if it isn't already set.
 function set_java_home() {
     # Clear the existing JAVA_HOME value if we set it ourselves, so that
     # we can reset it later, depending on the version of java the build
@@ -2427,14 +2423,26 @@ function set_java_home() {
     fi
 
     if [ ! "$JAVA_HOME" ]; then
-      case `uname -s` in
-          Darwin)
-              export JAVA_HOME=$(/usr/libexec/java_home -v 1.7)
-              ;;
-          *)
-              export JAVA_HOME=$(dirname $(dirname $(dirname $(readlink -f $(which java)))))
-              ;;
-      esac
+      if [ ! "$EXPERIMENTAL_USE_JAVA8" ]; then
+        case `uname -s` in
+            Darwin)
+                export JAVA_HOME=$(/usr/libexec/java_home -v 1.7)
+                ;;
+            *)
+                export JAVA_HOME=/usr/lib/jvm/java-7-openjdk-amd64
+                ;;
+        esac
+      fi
+      if [ ! "$JAVA_HOME" ] || [ ! -d "$JAVA_HOME" ]; then
+        case `uname -s` in
+            Darwin)
+                export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
+                ;;
+            *)
+                export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+                ;;
+        esac
+      fi
 
       # Keep track of the fact that we set JAVA_HOME ourselves, so that
       # we can change it on the next envsetup.sh, if required.

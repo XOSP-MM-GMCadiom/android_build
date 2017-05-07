@@ -96,14 +96,6 @@ Usage:  ota_from_target_files [flags] input_target_files output_ota_package
   --backup <boolean>
       Enable or disable the execution of backuptool.sh.
       Disabled by default.
-
-  --override_device <device>
-      Override device-specific asserts. Can be a comma-separated list.
-
-  --override_prop <boolean>
-      Override build.prop items with custom vendor init.
-      Enabled when TARGET_UNIFIED_DEVICE is defined in BoardConfig
-
 """
 
 from __future__ import print_function
@@ -523,6 +515,15 @@ def CopyInstallTools(output_zip):
       output_zip.write(install_source, install_target)
 
 
+def CopyExtra(output_zip):
+  install_path = os.path.join(OPTIONS.input_tmp, "EXTRA")
+  for root, subdirs, files in os.walk(install_path):
+     for f in files:
+      install_source = os.path.join(root, f)
+      install_target = os.path.join("extra", os.path.relpath(root, install_path), f)
+      output_zip.write(install_source, install_target)
+
+
 def WriteFullOTAPackage(input_zip, output_zip):
   # TODO: how to determine this?  We don't know what version it will
   # be installed on top of. For now, we expect the API just won't
@@ -628,6 +629,8 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
   if OPTIONS.backuptool:
     script.Mount("/system")
     script.RunBackup("backup")
+    if OPTIONS.info_dict.get("addonsu_updater") == "true":
+      CopyExtra(output_zip)
     script.Unmount("/system")
 
   system_progress = 0.75
@@ -726,6 +729,8 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
     if block_based:
       script.Mount("/system")
     script.RunBackup("restore")
+    if OPTIONS.info_dict.get("addonsu_updater") == "true":
+      script.AppenSuUpdater() # This must be done after backup restore
     if block_based:
       script.Unmount("/system")
 
@@ -778,7 +783,7 @@ endif;
   common.ZipWriteStr(output_zip, "system/build.prop",
                      ""+input_zip.read("SYSTEM/build.prop"))
 
-  common.ZipWriteStr(output_zip, "META-INF/org/cyanogenmod/releasekey",
+  common.ZipWriteStr(output_zip, "META-INF/org/lineageos/releasekey",
                      ""+input_zip.read("META/releasekey.txt"))
 
 def WritePolicyConfig(file_name, output_zip):
@@ -1654,10 +1659,6 @@ def main(argv):
                          "a float" % (a, o))
     elif o in ("--backup",):
       OPTIONS.backuptool = bool(a.lower() == 'true')
-    elif o in ("--override_device",):
-      OPTIONS.override_device = a
-    elif o in ("--override_prop",):
-      OPTIONS.override_prop = bool(a.lower() == 'true')
     else:
       return False
     return True
@@ -1683,9 +1684,7 @@ def main(argv):
                                  "verify",
                                  "no_fallback_to_full",
                                  "stash_threshold=",
-                                 "backup=",
-                                 "override_device=",
-                                 "override_prop="
+                                 "backup="
                              ], extra_option_handler=option_handler)
 
   if len(args) != 2:
@@ -1700,6 +1699,11 @@ def main(argv):
 
   OPTIONS.target_tmp = OPTIONS.input_tmp
   OPTIONS.info_dict = common.LoadInfoDict(input_zip)
+
+  if "ota_override_device" in OPTIONS.info_dict:
+    OPTIONS.override_device = OPTIONS.info_dict.get("ota_override_device")
+  if "ota_override_prop" in OPTIONS.info_dict:
+    OPTIONS.override_prop = OPTIONS.info_dict.get("ota_override_prop") == "true"
 
   # If this image was originally labelled with SELinux contexts, make sure we
   # also apply the labels in our new image. During building, the "file_contexts"

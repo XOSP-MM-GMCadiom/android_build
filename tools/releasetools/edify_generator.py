@@ -151,7 +151,7 @@ class EdifyGenerator(object):
     self.script.append(('run_program("/tmp/install/bin/backuptool.sh", "%s");' % command))
 
   def ValidateSignatures(self, command):
-    self.script.append('package_extract_file("META-INF/org/cyanogenmod/releasekey", "/tmp/releasekey");')
+    self.script.append('package_extract_file("META-INF/org/lineageos/releasekey", "/tmp/releasekey");')
     # Exit code 124 == abort. run_program returns raw, so left-shift 8bit
     self.script.append('run_program("/tmp/install/bin/otasigcheck.sh") != "31744" || abort("Can\'t install this package on top of incompatible data. Please try another package or run a factory reset");')
 
@@ -421,3 +421,10 @@ class EdifyGenerator(object):
       data = open(input_path, "rb").read()
     common.ZipWriteStr(output_zip, "META-INF/com/google/android/update-binary",
                        data, perms=0o755)
+
+  def AppenSuUpdater(self):
+    self.AppendExtra('if (run_program("test", "-f", "/system/addon.d/51-addonsu.sh") == "0" && run_program("test", "-f", "/system/xbin/su") == "0") then')
+    self.AppendExtra('package_extract_file("extra/su", "/system/xbin/su");')
+    self.SetPermissions("/system/xbin/su", 0, 2000, 0o755, "u:object_r:su_exec:s0", None)
+    self.MakeSymlinks([("/system/xbin/su", "/system/bin/su")])
+    self.AppendExtra('endif;')

@@ -518,7 +518,7 @@ def main(argv):
   common.ZipClose(input_zip)
   common.ZipClose(output_zip)
 
-  add_img_to_target_files.AddImagesToTargetFiles(args[1])
+  add_img_to_target_files.AddImagesToTargetFiles(args[1], rebuild_recovery=True)
 
   print("done.")
 
@@ -531,3 +531,5 @@ if __name__ == '__main__':
     print("   ERROR: %s" % e)
     print()
     sys.exit(1)
+  finally:
+    common.Cleanup()
